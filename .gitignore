@@ -1,0 +1,17 @@
+# CodeBuddy / IDE
+.codebuddy/
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node / 依赖
+node_modules/
+*.log
+
+# 临时文件
+*.tmp
+*.bak

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>千年一眼 · 从金源到抗联</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app">
+  <!-- 程序化氛围背景（可被 AI 图片替换） -->
+  <div id="bg">
+    <div id="bgGrad"></div>
+    <div id="bgTexture"></div>
+    <div id="particles"></div>
+  </div>
+
+  <!-- 电影黑边 -->
+  <div class="bar top"></div>
+  <div class="bar bottom"></div>
+
+  <!-- 场景文字区 -->
+  <section id="scene">
+    <div id="actTag"></div>
+    <div id="speaker"></div>
+    <div id="line"></div>
+    <div id="sub"></div>
+  </section>
+
+  <!-- HUD -->
+  <header id="hud">
+    <div id="era" class="mono">— · —</div>
+    <div id="modeTag"></div>
+    <button id="restartBtn" title="回到主菜单">主菜单</button>
+  </header>
+  <footer id="hudFoot">
+    <div id="factbar"></div>
+    <div id="plaque">史实依据：金上京遗址 · 玉泉酒厂 · 金代铜镜 · 何延川烈士纪念馆</div>
+  </footer>
+
+  <!-- 继续按钮（手动模式） -->
+  <button id="nextBtn">▼ 继续</button>
+
+  <!-- 选项区 -->
+  <div id="choices"></div>
+
+  <!-- 主菜单 -->
+  <div class="overlay" id="menuOverlay">
+    <div class="menuBox">
+      <div class="menuEyebrow">第一人称历史互动叙事 · 约 5 分钟</div>
+      <h1 class="menuTitle">千年一眼</h1>
+      <div class="menuSub">从金源到抗联 · 哈尔滨市阿城区 · 阿什河畔的一千年</div>
+      <div class="menuIntro">
+        你是一个「活了千年的人」。每一次闭眼再睁开，脚下的大地就换了一个名字——
+        从女真人的按出虎水，到抗联战士的阿什河。每到历史关键处，由你做出选择。
+      </div>
+      <div class="menuBtns">
+        <button class="bigBtn primary" id="btnManual">▶ 手动试玩</button>
+        <button class="bigBtn" id="btnAuto">◆ 自动演示</button>
+      </div>
+      <div class="menuTip">手动试玩：你来选择每一步；自动演示：沿史实正确路径自动播完。<br>
+      选错不罚——那只是「另一种真实历史的可能」，3 秒后回到本幕重选。</div>
+    </div>
+  </div>
+
+  <!-- 转场黑幕白字 -->
+  <div class="overlay" id="transitionOverlay"><div id="transitionText"></div></div>
+
+  <!-- 结局画面 -->
+  <div class="overlay" id="endingOverlay">
+    <div class="endingBox">
+      <div id="endingTag"></div>
+      <div id="endingTitle"></div>
+      <div id="endingVoice"></div>
+      <div id="endingCount"></div>
+    </div>
+  </div>
+
+  <!-- 片尾 -->
+  <div class="overlay" id="creditOverlay">
+    <div class="creditBox">
+      <div class="creditBig">千年一眼 · 家国永续</div>
+      <div class="creditMid">古人筑城立根，先烈浴血守国，我们薪火相传。<br>这就是阿什河的故事，这就是中国的故事。</div>
+      <div class="creditFoot">哈尔滨市阿城区 · 金源文化 · 东北抗联文化<br>《千年一眼：从金源到抗联》· 大学生创新创业大赛演示版</div>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
