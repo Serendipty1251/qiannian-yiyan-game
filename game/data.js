@@ -507,7 +507,7 @@ const FINAL_SEQ = {
       text: '城，守住了吗？',
       sub: '剪影微转 · 背景城墙影像清晰',
       visual: '暖金调：完颜阿骨打剪影望向主角，背景叠印按出虎水与夯土城墙。',
-      img: 'assets/final_1.png?v=3'
+      img: 'assets/final_1.png?v=4'
     },
     {
       speaker: '你的内心',
