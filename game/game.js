@@ -432,10 +432,8 @@
     a.choices.forEach(function (ch, i) {
       var b = document.createElement('button');
       b.className = 'choice';
-      var tagCls = ch.kind === 'good' || ch.kind === 'final' ? 'good' : 'bad';
-      var tagTxt = ch.kind === 'final' ? '终章 · 千年一眼 → 最终结局'
-                 : (ch.kind === 'ending' ? '终章 · ' + ch.tag : (ch.kind === 'good' ? '进入下一幕' : '结局 · ' + ch.tag));
-      b.innerHTML = '<span class="tag ' + tagCls + '">' + tagTxt + '</span><span class="label">' + ch.label + '</span><span class="key">' + ch.key + '</span>';
+      // 不预透结局走向：选项上只展示行为描述与按键，结局在抉择后揭晓
+      b.innerHTML = '<span class="label">' + ch.label + '</span><span class="key">' + ch.key + '</span>';
       b.addEventListener('click', function () { commitAdvance(function () { onChoose(a, ch); }); });
       el.choices.appendChild(b);
       setTimeout(function () { b.classList.add('on'); }, 120 + i * 130);
