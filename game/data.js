@@ -37,13 +37,6 @@ const ACTS = [
         sub: '镜头抬升 · 金上京会宁府遗址夯土城墙轮廓浮现',
         visual: '土黄色、长草的古城墙，自晨雾中缓缓浮现，无现代建筑。',
         img: 'assets/act0_2.png'
-      },
-      {
-        kind: 'titlecard',
-        text: '按出虎水 · 大金之源',
-        sub: '',
-        visual: '黑幕渐入，白字居中。',
-        img: ''
       }
     ],
     autoNext: true,           // 无选项，自动进入第一幕
