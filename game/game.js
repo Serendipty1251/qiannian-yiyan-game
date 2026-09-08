@@ -216,9 +216,9 @@
     el.modeTag.textContent = mode === 'auto' ? '◆ 自动演示' : '▶ 手动试玩';
     hide(el.menu);
     clearTimers(); stopType(); clearScene();
-    el.transition.classList.remove('show');
-    el.ending.classList.remove('show');
-    el.credit.classList.remove('show');
+    hide(el.transition);
+    hide(el.ending);
+    hide(el.credit);
     enterAct(0);
   }
 
@@ -478,7 +478,9 @@
     show(el.ending);
     showSpeaker('');
     var continueToNext = function () {
-      el.ending.classList.remove('show');
+      // 瞬时隐藏结局层（display:none）：若让它 0.6s 缓慢淡出，会叠在下一幕
+      // 标题黑幕的淡入窗口上，结局文字像“闪一下”一样浮在黑幕上消失
+      hide(el.ending);
       if (isFinal) { playFinal(); return; }
       // 删掉幕间黑幕转场：正确结局预览播完直接进下一幕标题卡，与序章一致
       if (a.id === 'act7') { afterAllActs(); return; }
@@ -511,7 +513,7 @@
     show(el.ending);
     var goBack = function () {
       clearTimers(); stopType();
-      el.ending.classList.remove('show');
+      hide(el.ending);   // 瞬时隐藏：避免残留淡出叠在回本幕的标题黑幕上
       el.ending.onclick = null;
       enterAct(S.actIdx);
     };
@@ -664,9 +666,12 @@
     S.phase = 'menu';
     clearTimers(); stopType(); clearScene();
     hide(el.nextBtn);
-    el.transition.classList.remove('show');
-    el.ending.classList.remove('show');
-    el.credit.classList.remove('show');
+    // 瞬时清掉全部遮罩：菜单淡入的半透明窗口里，不允许任何旧字幕/旧结局
+    // 文字还在淡出透出来（用户 Esc 退出时尤其明显）
+    hide(el.transition);
+    hide(el.ending);
+    hide(el.credit);
+    el.actTag.textContent = '';
     el.era.textContent = '— · —';
     el.factbar.textContent = '';
     el.modeTag.textContent = '';
