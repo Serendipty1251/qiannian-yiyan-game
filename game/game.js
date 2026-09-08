@@ -20,10 +20,13 @@
     btnManual: $('btnManual'), btnAuto: $('btnAuto'), restartBtn: $('restartBtn')
   };
 
-  // 图片层（用于替换程序化背景）
+  // 图片层（双图层：换 AI 背景图时交叉淡入，不硬切）
   var bgImg = document.createElement('div');
   bgImg.id = 'bgImg';
   el.bg.appendChild(bgImg);
+  var bgImgB = document.createElement('div');
+  bgImgB.id = 'bgImgB';
+  el.bg.appendChild(bgImgB);
 
   // ---------- 全局状态 ----------
   var S = {
@@ -60,17 +63,56 @@
     }
   }
 
-  function useBackdrop(mood, pal, imgPath) {
-    if (imgPath) {
-      bgImg.style.backgroundImage = 'url("' + imgPath + '")';
-      bgImg.classList.add('on');
-      el.bgGrad.style.opacity = '0';
-    } else {
-      bgImg.style.backgroundImage = '';
-      bgImg.classList.remove('on');
-      el.bgGrad.style.opacity = '1';
+  // ---------- 推进锁：保证“每点一下只有一个变化”（防双击/连点跳帧） ----------
+  var _lastTap = 0;
+  function commitAdvance(fn) {
+    var now = Date.now();
+    if (now - _lastTap < 360) return;   // 360ms 内重复点击忽略
+    _lastTap = now;
+    fn();
+  }
+
+  // 轻淡入辅助（新字幕 / 大字）
+  function popFade(node) {
+    if (!node) return;
+    node.classList.remove('fadeSoft');
+    void node.offsetWidth;
+    node.classList.add('fadeSoft');
+  }
+  function setSub(t) { el.sub.textContent = t || ''; if (t) popFade(el.sub); }
+
+  // ---------- 背景：氛围渐变 与 AI 图片层 交叉淡入 ----------
+  var bgLayers = [bgImg, bgImgB];
+  var curOn = -1;      // 当前可见图片层下标（-1 = 无图片，走氛围渐变）
+  var shotSeq = 0;     // 切换令牌：防止过期的图片 onload 覆盖新切换
+  function crossfadeBackdrop(imgPath) {
+    var seq = ++shotSeq;
+    if (!imgPath) {
+      // 切回程序化氛围背景
+      bgGrad.style.opacity = '1';
+      if (curOn >= 0) { bgLayers[curOn].classList.remove('on'); curOn = -1; }
+      return;
     }
+    // 选空闲层承载新图；等图片加载完成后再交叉淡入（避免白屏）
+    var next = bgLayers[curOn === 0 ? 1 : 0];
+    var img = new Image();
+    var apply = function () {
+      if (seq !== shotSeq) return;
+      next.style.backgroundImage = 'url("' + imgPath + '")';
+      if (curOn >= 0) bgLayers[curOn].classList.remove('on');
+      next.classList.add('on');
+      bgGrad.style.opacity = '0';
+      curOn = next === bgLayers[0] ? 0 : 1;
+    };
+    img.onload = apply;
+    img.onerror = apply;      // 加载失败也照常切换，避免卡住
+    img.src = imgPath;
+  }
+  function preloadShot(path) { if (path) { var im = new Image(); im.src = path; } }
+
+  function useBackdrop(mood, pal, imgPath) {
     setMood(mood, pal);
+    crossfadeBackdrop(imgPath || '');
     spawnParticles(mood);
   }
 
@@ -108,6 +150,7 @@
     clearTimers(); stopType();
     node.textContent = '';
     if (!text) { if (done) done(); return; }
+    popFade(node);
     S.typing = true;
     var i = 0;
     var speed = 1000 / cps;
@@ -197,11 +240,24 @@
   function showTitleCard(text, era, done) {
     el.transitionText.textContent = text + (era ? '\n' + era : '');
     show(el.transition);
-    var wait = S.mode === 'auto' ? 2400 : 1900;
-    later(function () {
+    var finished = false;
+    var finish = function () {
+      if (finished) return;
+      finished = true;
       el.transition.classList.remove('show');
-      later(done, 500);
-    }, wait);
+      later(done, S.mode === 'auto' ? 450 : 380);
+    };
+    if (S.mode === 'manual') {
+      // 手动模式：点一下即跳过标题卡
+      el.transition.onclick = function () {
+        commitAdvance(function () {
+          if (!finished) { clearTimers(); finish(); }
+        });
+      };
+    } else {
+      el.transition.onclick = null;
+    }
+    later(finish, S.mode === 'auto' ? 2400 : 1900);
   }
 
   function afterIntro(a) {
@@ -228,42 +284,45 @@
     el.sub.textContent = fr.sub || '';
     el.line.style.minHeight = fr.text ? 'auto' : '0';
 
+    // 统一推进动作：手动点击（正文 / 继续按钮）共用，避免两路重复收尾
+    var goNext = function () {
+      if (i < a.frames.length - 1) playFrame(i + 1);
+      else afterFrames(a);
+    };
+
     var after = function () {
       if (S.mode === 'manual') {
-        // 最后一帧手动 → 显示继续；点击进下帧或提问
+        // 打字完成：显示“继续”；点击进下帧或提问
         if (i < a.frames.length - 1 || a.autoNext || !a.choices) {
           el.nextBtn.classList.remove('hidden');
-          bindOnceContinue(function () {
-            if (S.typing) { finishType(); return; }
-            if (i < a.frames.length - 1) playFrame(i + 1);
-            else afterFrames(a);
-          });
+          bindOnceContinue(goNext);
         } else {
-          // 剧情帧播完 → 自动弹选项
+          // 剧情帧播完 → 稍候自动弹选项
           later(function () { afterFrames(a); }, 900);
         }
       } else {
         // 自动
         var pause = fr.kind === 'titlecard' ? 1600 : (i < a.frames.length - 1 ? 1400 : 1500);
-        later(function () {
-          if (i < a.frames.length - 1) playFrame(i + 1);
-          else afterFrames(a);
-        }, pause);
+        later(goNext, pause);
       }
     };
+
+    // 预载下一帧图片：换帧时图片已就绪，画面不白屏（整体流畅）
+    if (a.frames[i + 1] && a.frames[i + 1].img) preloadShot(a.frames[i + 1].img);
 
     if (fr.kind === 'titlecard') {
       // 大字标题帧：纯黑底、不做逐字
       useBackdrop('black', { sky: '#000000', sky2: '#0b0b0d', deep: '#000000' }, '');
       el.speaker.classList.remove('show');
       el.line.textContent = fr.text;
+      popFade(el.line);
       el.line.style.fontSize = 'clamp(26px, 6vh, 56px)';
       el.line.style.letterSpacing = '10px';
       el.line.style.color = '#f5efe0';
       later(after, S.mode === 'auto' ? 2200 : 1600);
       if (S.mode === 'manual') {
         el.nextBtn.classList.remove('hidden');
-        bindOnceContinue(after);
+        bindOnceContinue(goNext);
       }
       return;
     }
@@ -279,20 +338,25 @@
     } else {
       later(after, S.mode === 'auto' ? 1200 : 900);
     }
-    if (S.mode === 'manual' && fr.text) {
+    if (S.mode === 'manual') {
+      // 点击正文 = 一次点击、一个明确变化：
+      //   打字中第 1 下 → 本句立即完整显示；再第 2 下 → 进入下一帧
       el.line.onclick = function () {
-        if (S.typing) {
-          stopType();
-          el.line.textContent = fr.text;
-          later(function () {
+        commitAdvance(function () {
+          if (S.typing) {
+            stopType();
+            el.line.textContent = fr.text;
             if (i < a.frames.length - 1) {
-              el.nextBtn.classList.remove('hidden');
-              bindOnceContinue(function () { playFrame(i + 1); });
-            } else {
-              later(function () { afterFrames(a); }, 600);
+              later(function () {
+                el.nextBtn.classList.remove('hidden');
+                bindOnceContinue(goNext);
+              }, 120);
             }
-          }, 200);
-        }
+          } else if (i < a.frames.length - 1) {
+            playFrame(i + 1);
+          }
+          // 末尾帧：交给“继续”按钮或自动流程，避免重复收尾
+        });
       };
     }
   }
@@ -319,6 +383,7 @@
     el.sub.textContent = '';
     // 提问引导
     el.line.textContent = a.qPrompt || '';
+    if (a.qPrompt) popFade(el.line);
     el.line.style.fontSize = '';
     el.choices.innerHTML = '';
     a.choices.forEach(function (ch, i) {
@@ -328,7 +393,7 @@
       var tagTxt = ch.kind === 'final' ? '终章 · 千年一眼 → 最终结局'
                  : (ch.kind === 'ending' ? '终章 · ' + ch.tag : (ch.kind === 'good' ? '进入下一幕' : '结局 · ' + ch.tag));
       b.innerHTML = '<span class="tag ' + tagCls + '">' + tagTxt + '</span><span class="label">' + ch.label + '</span><span class="key">' + ch.key + '</span>';
-      b.addEventListener('click', function () { onChoose(a, ch); });
+      b.addEventListener('click', function () { commitAdvance(function () { onChoose(a, ch); }); });
       el.choices.appendChild(b);
       setTimeout(function () { b.classList.add('on'); }, 120 + i * 130);
     });
@@ -420,14 +485,16 @@
       };
       later(tick, S.mode === 'auto' ? 500 : 800);
     });
-    // 手动模式允许点击结束等待
+    // 手动模式允许点击结束等待（点一下即回到本幕重选）
     if (S.mode === 'manual') {
       el.ending.onclick = function () {
         if (S.phase !== 'ending') return;
-        clearTimers(); stopType();
-        el.ending.classList.remove('show');
-        el.ending.onclick = null;
-        enterAct(S.actIdx);
+        commitAdvance(function () {
+          clearTimers(); stopType();
+          el.ending.classList.remove('show');
+          el.ending.onclick = null;
+          enterAct(S.actIdx);
+        });
       };
     }
   }
@@ -436,11 +503,26 @@
   function showTransition(text, done) {
     hide(el.nextBtn);
     el.transitionText.textContent = text;
+    popFade(el.transitionText);
     show(el.transition);
-    later(function () {
+    var finished = false;
+    var finish = function () {
+      if (finished) return;
+      finished = true;
       el.transition.classList.remove('show');
-      later(done, 550);
-    }, S.mode === 'auto' ? 2500 : 2100);
+      later(done, S.mode === 'auto' ? 500 : 420);
+    };
+    if (S.mode === 'manual') {
+      // 手动模式：点一下即跳过幕间转场
+      el.transition.onclick = function () {
+        commitAdvance(function () {
+          if (!finished) { clearTimers(); finish(); }
+        });
+      };
+    } else {
+      el.transition.onclick = null;
+    }
+    later(finish, S.mode === 'auto' ? 2500 : 2100);
   }
 
   // ---------- 最终结局 ----------
@@ -458,8 +540,10 @@
       clearScene();
       useBackdrop(seq.mood, seq.palette, fr.img || '');
       el.actTag.textContent = fi === 0 ? '最终结局 · 千年对话' : '';
-      el.sub.textContent = fr.sub || '';
+      setSub(fr.sub || '');
       showSpeaker(fr.speaker || '');
+      // 预载下一帧图片，保证结局连续播放顺畅
+      if (seq.frames[fi + 1] && seq.frames[fi + 1].img) preloadShot(seq.frames[fi + 1].img);
       if (fr.text) {
         typeInto(el.line, fr.text, S.mode === 'auto' ? 24 : 45, function () {
           later(function () { fi++; stepFinal(); }, S.mode === 'auto' ? 2200 : 2600);
@@ -469,8 +553,10 @@
       }
       if (S.mode === 'manual' && fr.text) {
         el.line.onclick = function () {
-          if (S.typing) { stopType(); el.line.textContent = fr.text; }
-          else { fi++; stepFinal(); }
+          commitAdvance(function () {
+            if (S.typing) { stopType(); el.line.textContent = fr.text; }
+            else { fi++; stepFinal(); }
+          });
         };
       }
     };
@@ -486,11 +572,24 @@
     S.phase = 'credit';
     hide(el.nextBtn);
     show(el.credit);
+    if (S.mode === 'manual') {
+      // 手动模式：点一下即结束片尾、返回主菜单
+      el.credit.onclick = function () {
+        commitAdvance(function () {
+          if (S.phase !== 'credit') return;
+          clearTimers();
+          el.credit.classList.remove('show');
+          showMenu();
+        });
+      };
+    } else {
+      el.credit.onclick = null;
+    }
     later(function () {
-      // 播放完片尾 → 回主菜单
+      // 自动播完片尾 → 回主菜单
       el.credit.classList.remove('show');
       showMenu();
-    }, S.mode === 'auto' ? 8000 : 4000);
+    }, S.mode === 'auto' ? 8000 : 6000);
   }
 
   // ---------- 主菜单 / 重启 ----------
@@ -512,7 +611,12 @@
   var contHandler = null;
   function bindOnceContinue(fn) {
     if (contHandler) el.nextBtn.removeEventListener('click', contHandler);
-    contHandler = function () { if (S.typing) { finishType(); return; } fn(); };
+    contHandler = function () {
+      commitAdvance(function () {
+        if (S.typing) { finishType(); return; }
+        fn();
+      });
+    };
     el.nextBtn.addEventListener('click', contHandler);
   }
 
@@ -524,12 +628,12 @@
     var a = act();
     if (!a.choices) return;
     var ch = a.choices.filter(function (c) { return c.key === k; })[0];
-    if (ch) onChoose(a, ch);
+    if (ch) commitAdvance(function () { onChoose(a, ch); });
   });
 
   // ---------- 启动 ----------
-  el.btnManual.addEventListener('click', function () { startGame('manual'); });
-  el.btnAuto.addEventListener('click', function () { startGame('auto'); });
+  el.btnManual.addEventListener('click', function () { commitAdvance(function () { startGame('manual'); }); });
+  el.btnAuto.addEventListener('click', function () { commitAdvance(function () { startGame('auto'); }); });
   el.restartBtn.addEventListener('click', function () { showMenu(); });
 
   // 初始背景
