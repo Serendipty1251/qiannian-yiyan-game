@@ -17,7 +17,12 @@
     ending: $('endingOverlay'), endingTag: $('endingTag'), endingTitle: $('endingTitle'),
     endingVoice: $('endingVoice'), endingCount: $('endingCount'),
     credit: $('creditOverlay'),
-    btnManual: $('btnManual'), btnAuto: $('btnAuto'), restartBtn: $('restartBtn')
+    btnManual: $('btnManual'), btnAuto: $('btnAuto'), restartBtn: $('restartBtn'),
+    btnTimeline: $('btnTimeline'), btnGallery: $('btnGallery'),
+    panel: $('panelOverlay'), panelBack: $('panelBack'), panelTabs: null, panes: null,
+    paneTimeline: $('paneTimeline'), paneGallery: $('paneGallery'),
+    view: $('viewOverlay'), viewTag: $('viewTag'), viewTitle: $('viewTitle'),
+    viewVoice: $('viewVoice'), viewFact: $('viewFact'), viewHint: $('viewHint')
   };
 
   // 图片层（双图层：换 AI 背景图时交叉淡入，不硬切）
@@ -210,16 +215,18 @@
   }
 
   // ================= 主流程 =================
-  function startGame(mode) {
+  function startGame(mode, fromIdx) {
     S.mode = mode;
-    S.actIdx = 0;
+    S.actIdx = fromIdx || 0;
     el.modeTag.textContent = mode === 'auto' ? '◆ 自动演示' : '▶ 手动试玩';
     hide(el.menu);
+    hide(el.panel);
+    hide(el.view);
     clearTimers(); stopType(); clearScene();
     hide(el.transition);
     hide(el.ending);
     hide(el.credit);
-    enterAct(0);
+    enterAct(S.actIdx);
   }
 
   function act() { return ACTS[S.actIdx]; }
@@ -468,6 +475,7 @@
   // 正确选项的短暂反馈
   function playGoodPreview(a, ch, isFinal) {
     S.phase = 'goodpreview';
+    if (isFinal) markSeen(a.id + ':' + ch.key);   // 第七幕 C：点亮“通往最终结局”收藏
     useBackdrop(ch.ending.mood, ch.ending.palette, ch.ending.img || '');
     el.endingTag.textContent = isFinal ? '最终结局 · 千年对话' : '你的选择 · 写入史册';
     el.endingTitle.textContent = isFinal ? '沿着阿什河漫步' : '';
@@ -502,6 +510,7 @@
   // 错误选项 → 结局画面 3 秒 → 回到本幕重选
   function playEnding(ch, a) {
     S.phase = 'ending';
+    markSeen(a.id + ':' + ch.key);   // 点亮图鉴：见证“另一条历史的路”
     useBackdrop(ch.ending.mood, ch.ending.palette, ch.ending.img || '');
     el.endingTag.textContent = '结局 · ' + ch.tag;
     el.endingTitle.textContent = ch.tag;
@@ -638,6 +647,7 @@
   function showCredit() {
     S.phase = 'credit';
     hide(el.nextBtn);
+    markSeen('final:credit');   // 完整看完片尾 → 点亮最终结局收藏
     show(el.credit);
     if (S.mode === 'manual') {
       // 手动模式：点一下即结束片尾、返回主菜单（不自动计时）
@@ -659,6 +669,189 @@
     }
   }
 
+  // ============ 第二屏：章节时间轴 / 结局图鉴 ============
+  // 图鉴收藏：记录玩家在手动试玩中见证过的结局（localStorage 持久化）
+  var GAL_LS = 'qiannian_gallery_v1';
+  function loadSeen() {
+    try { var s = localStorage.getItem(GAL_LS); return s ? JSON.parse(s) : []; }
+    catch (e) { return []; }
+  }
+  function saveSeen(arr) { try { localStorage.setItem(GAL_LS, JSON.stringify(arr)); } catch (e) {} }
+  function markSeen(id) {
+    var arr = loadSeen();
+    if (arr.indexOf(id) < 0) { arr.push(id); saveSeen(arr); }
+  }
+  function isSeen(id) { return loadSeen().indexOf(id) >= 0; }
+
+  // 收集全部「结局」条目：错误选项分支 + 第七幕尾声 + 最终结局
+  function collectGallery() {
+    var items = [];
+    ACTS.forEach(function (a) {
+      if (!a.choices) return;
+      a.choices.forEach(function (ch) {
+        if (ch.kind === 'good') return;
+        items.push({
+          id: a.id + ':' + ch.key,
+          act: a.title,
+          era: a.era,
+          tag: ch.tag,
+          kind: ch.kind,
+          voice: ch.ending.voice,
+          fact: ch.ending.fact,
+          mood: ch.ending.mood,
+          palette: ch.ending.palette,
+          img: ch.ending.img
+        });
+      });
+    });
+    // 最终结局 · 千年对话（完整通关后解锁）
+    items.push({
+      id: 'final:credit',
+      act: '最终结局 · 千年对话',
+      era: '当代 · 阿什河',
+      tag: '家国永续',
+      kind: 'credit',
+      voice: '古人筑城立根，先烈浴血守国，我们薪火相传。这就是阿什河的故事，这就是中国的故事。',
+      fact: '哈尔滨市阿城区 · 金源文化 · 东北抗联文化（完整走完史实主线后解锁）',
+      mood: FINAL_SEQ.mood,
+      palette: FINAL_SEQ.palette,
+      img: 'assets/final_5.png'
+    });
+    return items;
+  }
+
+  // 渲染章节时间轴：从任意一幕开始（手动 / 自动）
+  function renderTimeline() {
+    el.paneTimeline.innerHTML = '';
+    var wrap = document.createElement('div');
+    wrap.className = 'tlWrap';
+    var hint = document.createElement('div');
+    hint.className = 'tlHint';
+    hint.textContent = '沿这条河走一千年：任选一幕开始。手动 = 你来选择；自动 = 沿史实路径自动推进。';
+    wrap.appendChild(hint);
+    ACTS.forEach(function (a, idx) {
+      var it = document.createElement('div');
+      it.className = 'tlItem';
+      var btnBox = document.createElement('div');
+      btnBox.className = 'tlStart';
+      var bManual = document.createElement('button');
+      bManual.className = 'midBtn'; bManual.textContent = '▶ 从此幕手动';
+      bManual.addEventListener('click', function () { commitAdvance(function () { startGame('manual', idx); }); });
+      var bAuto = document.createElement('button');
+      bAuto.className = 'midBtn'; bAuto.textContent = '◆ 从此幕自动';
+      bAuto.addEventListener('click', function () { commitAdvance(function () { startGame('auto', idx); }); });
+      btnBox.appendChild(bManual); btnBox.appendChild(bAuto);
+      it.innerHTML = '<div class="tlDot"></div>' +
+        '<div class="tlEra">' + a.era + '</div>' +
+        '<div class="tlInfo"><div class="tlTitle">' + a.title + '</div>' +
+        '<div class="tlSub">' + (a.subtitle || (a.frames && a.frames[0] && a.frames[0].sub) || '') + '</div></div>';
+      it.appendChild(btnBox);
+      wrap.appendChild(it);
+    });
+    el.paneTimeline.appendChild(wrap);
+  }
+
+  // 渲染结局图鉴
+  function renderGallery() {
+    var items = collectGallery();
+    var seen = loadSeen();
+    var pane = el.paneGallery;
+    pane.innerHTML = '';
+    var top = document.createElement('div');
+    top.className = 'galTop';
+    top.innerHTML = '<div class="galTopTitle">见证过的历史 · 结局图鉴</div>' +
+      '<div class="galTopCount">已见证 ' + seen.length + ' / ' + items.length + '</div>';
+    pane.appendChild(top);
+    if (seen.length === 0) {
+      var e = document.createElement('div');
+      e.className = 'galEmpty';
+      e.textContent = '你尚未见证任何结局。进入「手动试玩」，在历史的岔路口做出选择——每一条未被选中的路，都会在这里点亮。';
+      pane.appendChild(e);
+    }
+    var grid = document.createElement('div');
+    grid.className = 'galGrid';
+    items.forEach(function (it) {
+      var unlocked = seen.indexOf(it.id) >= 0;
+      var card = document.createElement('button');
+      card.className = 'galCard' + (unlocked ? '' : ' locked');
+      var kindLabel = it.kind === 'bad' ? '另一条路 · ' + it.era
+        : (it.kind === 'ending' ? '终章尾声 · ' + it.era
+          : (it.kind === 'final' ? '通往最终结局 · ' + it.era : it.era));
+      card.innerHTML = '<div class="galEra">' + it.act + '</div>' +
+        '<div class="galTag">' + (unlocked ? it.tag : '？？？') + '</div>' +
+        '<div class="galAct">' + (unlocked ? kindLabel : '作出选择后点亮') + '</div>';
+      if (unlocked) {
+        card.addEventListener('click', function () { showEndingReview(it); });
+      }
+      grid.appendChild(card);
+    });
+    pane.appendChild(grid);
+    refreshGalleryBadge(items.length, seen.length);
+  }
+
+  function refreshGalleryBadge(total, seenCount) {
+    if (el.btnGallery) {
+      el.btnGallery.textContent = '❖ 结局图鉴' + (total ? ' · ' + seenCount + '/' + total : '');
+    }
+  }
+
+  // 面板 Tab 切换
+  var panelTabs = null;
+  function bindPanelTabs() {
+    if (!el.panel) return;
+    el.panelTabs = el.panel.querySelectorAll('.ptab');
+    el.panelTabs.forEach(function (t) {
+      t.addEventListener('click', function () {
+        switchPane(t.getAttribute('data-tab'));
+      });
+    });
+  }
+  function switchPane(name) {
+    if (el.panelTabs) el.panelTabs.forEach(function (t) {
+      t.classList.toggle('on', t.getAttribute('data-tab') === name);
+    });
+    el.paneTimeline.classList.toggle('on', name === 'timeline');
+    el.paneGallery.classList.toggle('on', name === 'gallery');
+  }
+
+  function openPanel(tab) {
+    S.phase = 'panel';
+    renderTimeline();
+    renderGallery();
+    switchPane(tab || 'timeline');
+    hide(el.menu);
+    show(el.panel);
+  }
+  function closePanel() {
+    hide(el.panel);
+    hide(el.view);
+    show(el.menu);
+  }
+
+  // 图鉴回看：全屏展示该结局画面与旁白
+  function showEndingReview(it) {
+    S.phase = 'panel';
+    clearTimers(); stopType(); clearScene();
+    hide(el.nextBtn);
+    hide(el.panel);   // 露出场景底层，好让结局背景图全屏呈现
+    useBackdrop(it.mood, it.palette, it.img);
+    el.viewTag.textContent = it.act;
+    el.viewTitle.textContent = it.tag;
+    el.viewVoice.textContent = it.voice;
+    el.viewFact.textContent = '史实依据：' + it.fact;
+    el.viewHint.textContent = '点击任意处返回图鉴';
+    show(el.view);
+    el.view.onclick = closeEndingView;
+  }
+  function closeEndingView() {
+    hide(el.view);
+    if (S.phase === 'panel') {
+      renderGallery();
+      useBackdrop('mist', { sky: '#1b2229', sky2: '#10151b', deep: '#06090c' }, '');
+      show(el.panel);
+    }
+  }
+
   // ---------- 主菜单 / 重启 ----------
   function showMenu() {
     S.phase = 'menu';
@@ -669,10 +862,15 @@
     hide(el.transition);
     hide(el.ending);
     hide(el.credit);
+    hide(el.panel);
+    hide(el.view);
     el.actTag.textContent = '';
     el.era.textContent = '— · —';
     el.factbar.textContent = '';
     el.modeTag.textContent = '';
+    // 主菜单徽标：已见证结局 n/总数
+    var galAll = collectGallery();
+    refreshGalleryBadge(galAll.length, loadSeen().length);
     useBackdrop('mist', { sky: '#1b2229', sky2: '#10151b', deep: '#06090c' }, '');
     show(el.menu);
   }
@@ -692,7 +890,15 @@
 
   // ---------- 键盘 ----------
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { showMenu(); return; }
+    if (e.key === 'Escape') {
+      if (S.phase === 'panel' && el.view.classList.contains('show')) {
+        closeEndingView();
+        return;
+      }
+      if (S.phase === 'panel') { closePanel(); return; }
+      showMenu();
+      return;
+    }
     if (S.phase !== 'question' || S.mode !== 'manual') return;
     var k = e.key.toUpperCase();
     var a = act();
@@ -704,7 +910,11 @@
   // ---------- 启动 ----------
   el.btnManual.addEventListener('click', function () { commitAdvance(function () { startGame('manual'); }); });
   el.btnAuto.addEventListener('click', function () { commitAdvance(function () { startGame('auto'); }); });
+  el.btnTimeline.addEventListener('click', function () { commitAdvance(function () { openPanel('timeline'); }); });
+  el.btnGallery.addEventListener('click', function () { commitAdvance(function () { openPanel('gallery'); }); });
+  el.panelBack.addEventListener('click', function () { commitAdvance(function () { closePanel(); }); });
   el.restartBtn.addEventListener('click', function () { showMenu(); });
+  bindPanelTabs();
 
   // 初始背景
   showMenu();
