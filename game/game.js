@@ -90,6 +90,20 @@
   var bgLayers = [bgImg, bgImgB];
   var curOn = -1;      // 当前可见图片层下标（-1 = 无图片，走氛围渐变）
   var shotSeq = 0;     // 切换令牌：防止过期的图片 onload 覆盖新切换
+  // 本作 AI 图多为 1.5:1 横图。当视口比图更宽（如 16:9、21:9、横屏大屏）时，
+  // cover 会纵向放大裁掉上下的主体（人脸多居上），此时贴顶对齐；图比视口宽时
+  // 保持垂直居中即可（此时横向裁切，不伤主体）。
+  function refitBackdrops() {
+    var vw = window.innerWidth, vh = window.innerHeight;
+    if (!(vw > 0 && vh > 0)) return;
+    bgLayers.forEach(function (l) {
+      var w = parseFloat(l.dataset.w || ''), h = parseFloat(l.dataset.h || '');
+      if (w > 0 && h > 0)
+        l.style.backgroundPosition = (vw / vh) > (w / h) ? 'center top' : 'center center';
+    });
+  }
+  window.addEventListener('resize', refitBackdrops);
+  window.addEventListener('orientationchange', refitBackdrops);
   function crossfadeBackdrop(imgPath) {
     var seq = ++shotSeq;
     if (!imgPath) {
@@ -104,6 +118,9 @@
     var apply = function () {
       if (seq !== shotSeq) return;
       next.style.backgroundImage = 'url("' + imgPath + '")';
+      next.dataset.w = img.naturalWidth || '';
+      next.dataset.h = img.naturalHeight || '';
+      refitBackdrops();
       if (curOn >= 0) bgLayers[curOn].classList.remove('on');
       next.classList.add('on');
       bgGrad.style.opacity = '0';
