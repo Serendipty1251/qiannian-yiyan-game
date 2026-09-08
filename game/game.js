@@ -402,12 +402,16 @@
 
   function afterFrames(a) {
     hide(el.nextBtn);
+    if (a.id === 'act0') {
+      // 序章：删掉城墙图与第一幕标题之间的黑幕转场帧（“我又闭上了眼…”），
+      // 帧播完直接接第一幕标题卡，不再多停一帧纯黑过渡
+      enterAct(1);
+      return;
+    }
     if (a.autoNext || !a.choices) {
-      // 序章 → 转场进第一幕
       S.phase = 'transition';
       showTransition(a.transition, function () {
-        if (a.id === 'act0') enterAct(1);
-        else afterAllActs();
+        afterAllActs();
       });
       return;
     }
