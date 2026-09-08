@@ -223,13 +223,15 @@
       el.sub.textContent = '';
       var cps = S.mode === 'auto' ? 15 : 26;
       typeInto(el.line, INTRO_LINE, cps, function () {
-        afterIntro(a);
+        // 自动演示：打字完成自动进入正片；手动：停在全文，等点击“继续”
+        if (S.mode === 'auto') afterIntro(a);
       });
       if (S.mode === 'manual') {
         el.nextBtn.classList.remove('hidden');
         el.nextBtn.textContent = '▼ 继续';
         bindOnceContinue(function () {
-          if (S.typing) { finishType(); } else { afterIntro(a); }
+          if (S.typing) { finishType(); return; }
+          afterIntro(a);
         });
       }
     });
@@ -245,10 +247,15 @@
       if (finished) return;
       finished = true;
       el.transition.classList.remove('show');
-      later(done, S.mode === 'auto' ? 450 : 380);
+      later(done, S.mode === 'auto' ? 450 : 420);
     };
     if (S.mode === 'manual') {
-      // 手动模式：点一下即跳过标题卡
+      // 手动：标题卡不自动播放，必须点“继续”/点画面才进入下一步
+      el.nextBtn.classList.remove('hidden');
+      el.nextBtn.textContent = '▼ 继续';
+      bindOnceContinue(function () {
+        if (!finished) { clearTimers(); finish(); }
+      });
       el.transition.onclick = function () {
         commitAdvance(function () {
           if (!finished) { clearTimers(); finish(); }
@@ -256,8 +263,8 @@
       };
     } else {
       el.transition.onclick = null;
+      later(finish, 2400);
     }
-    later(finish, S.mode === 'auto' ? 2400 : 1900);
   }
 
   function afterIntro(a) {
@@ -297,8 +304,9 @@
           el.nextBtn.classList.remove('hidden');
           bindOnceContinue(goNext);
         } else {
-          // 剧情帧播完 → 稍候自动弹选项
-          later(function () { afterFrames(a); }, 900);
+          // 末尾剧情帧读完：点“继续”才弹选项（不自动弹出）
+          el.nextBtn.classList.remove('hidden');
+          bindOnceContinue(goNext);
         }
       } else {
         // 自动
@@ -319,8 +327,9 @@
       el.line.style.fontSize = 'clamp(26px, 6vh, 56px)';
       el.line.style.letterSpacing = '10px';
       el.line.style.color = '#f5efe0';
-      later(after, S.mode === 'auto' ? 2200 : 1600);
-      if (S.mode === 'manual') {
+      if (S.mode === 'auto') {
+        later(after, 2200);
+      } else {
         el.nextBtn.classList.remove('hidden');
         bindOnceContinue(goNext);
       }
@@ -434,17 +443,28 @@
     el.endingTitle.style.display = isFinal ? 'none' : 'block';
     show(el.ending);
     showSpeaker('');
+    var continueToNext = function () {
+      el.ending.classList.remove('show');
+      if (isFinal) { playFinal(); return; }
+      // 转场到下一幕
+      S.phase = 'transition';
+      showTransition(a.transition, function () {
+        if (a.id === 'act7') { afterAllActs(); return; }
+        enterAct(S.actIdx + 1);
+      });
+    };
     typeInto(el.endingVoice, ch.ending.voice, S.mode === 'auto' ? 20 : 45, function () {
-      later(function () {
-        el.ending.classList.remove('show');
-        if (isFinal) { playFinal(); return; }
-        // 转场到下一幕
-        S.phase = 'transition';
-        showTransition(a.transition, function () {
-          if (a.id === 'act7') { afterAllActs(); return; }
-          enterAct(S.actIdx + 1);
+      if (S.mode === 'auto') { later(continueToNext, 1500); return; }
+      // 手动：看完正确结局预览后停下，点“继续”/画面才进入下一幕
+      el.nextBtn.classList.remove('hidden');
+      el.nextBtn.textContent = '▼ 继续';
+      bindOnceContinue(continueToNext);
+      el.ending.onclick = function () {
+        commitAdvance(function () {
+          if (S.phase !== 'goodpreview') return;
+          continueToNext();
         });
-      }, S.mode === 'auto' ? 1500 : 2200);
+      };
     });
   }
 
@@ -458,43 +478,37 @@
     el.endingVoice.textContent = '';
     el.endingCount.textContent = '';
     show(el.ending);
-    var back = (ch.kind === 'ending') ? '这是平行历史的一瞥 · 你仍可重选，走向最终结局' : '3 秒后回到本幕，重新选择';
-    el.endingCount.textContent = back;
+    var goBack = function () {
+      clearTimers(); stopType();
+      el.ending.classList.remove('show');
+      el.ending.onclick = null;
+      enterAct(S.actIdx);
+    };
+    // 提示文案：手动=点继续/画面返回；自动=倒计时返回
+    el.endingCount.textContent = (ch.kind === 'ending')
+      ? '再选一次，去看看另一个答案 →'
+      : (S.mode === 'manual' ? '点击「继续」返回，重新选择 →' : '3 秒后回到本幕，重新选择');
     typeInto(el.endingVoice, ch.ending.voice, S.mode === 'auto' ? 20 : 45, function () {
-      var n = 3;
-      var closeBack = function () {
-        // 回到本幕重选（剧情帧重播到问题处）
-        el.ending.classList.remove('show');
-        el.ending.onclick = null;
-        enterAct(S.actIdx);
-      };
-      var tick = function () {
-        if (ch.kind === 'ending') {
-          // 终幕 A/B：多停留片刻供阅读，再返回可重选
-          el.endingCount.textContent = '再选一次，去看看另一个答案 →';
-          later(closeBack, S.mode === 'auto' ? 3000 : 2600);
-          return;
-        }
-        if (n > 0) {
-          el.endingCount.textContent = n + ' 秒后回到本幕重选…';
-          n--;
-          later(tick, 1000);
-          return;
-        }
-        closeBack();
-      };
-      later(tick, S.mode === 'auto' ? 500 : 800);
+      if (S.mode === 'auto') {
+        var n = 3;
+        var tick = function () {
+          if (ch.kind === 'ending') { el.endingCount.textContent = '再选一次，去看看另一个答案 →'; later(goBack, 3000); return; }
+          if (n > 0) { el.endingCount.textContent = n + ' 秒后回到本幕重选…'; n--; later(tick, 1000); return; }
+          goBack();
+        };
+        later(tick, 500);
+        return;
+      }
+      // 手动：看完整段后停下，点“继续”/画面才返回本幕重选
+      el.nextBtn.classList.remove('hidden');
+      el.nextBtn.textContent = '▼ 继续';
+      bindOnceContinue(goBack);
     });
-    // 手动模式允许点击结束等待（点一下即回到本幕重选）
+    // 手动模式：点画面也可返回
     if (S.mode === 'manual') {
       el.ending.onclick = function () {
         if (S.phase !== 'ending') return;
-        commitAdvance(function () {
-          clearTimers(); stopType();
-          el.ending.classList.remove('show');
-          el.ending.onclick = null;
-          enterAct(S.actIdx);
-        });
+        commitAdvance(goBack);
       };
     }
   }
@@ -513,7 +527,12 @@
       later(done, S.mode === 'auto' ? 500 : 420);
     };
     if (S.mode === 'manual') {
-      // 手动模式：点一下即跳过幕间转场
+      // 手动：幕间转场不自动播放，点“继续”/点画面才进入下一幕
+      el.nextBtn.classList.remove('hidden');
+      el.nextBtn.textContent = '▼ 继续';
+      bindOnceContinue(function () {
+        if (!finished) { clearTimers(); finish(); }
+      });
       el.transition.onclick = function () {
         commitAdvance(function () {
           if (!finished) { clearTimers(); finish(); }
@@ -521,8 +540,8 @@
       };
     } else {
       el.transition.onclick = null;
+      later(finish, 2500);
     }
-    later(finish, S.mode === 'auto' ? 2500 : 2100);
   }
 
   // ---------- 最终结局 ----------
@@ -546,7 +565,8 @@
       if (seq.frames[fi + 1] && seq.frames[fi + 1].img) preloadShot(seq.frames[fi + 1].img);
       if (fr.text) {
         typeInto(el.line, fr.text, S.mode === 'auto' ? 24 : 45, function () {
-          later(function () { fi++; stepFinal(); }, S.mode === 'auto' ? 2200 : 2600);
+          // 自动演示：打字完成稍候自动推进；手动：停在全文，点击正文/继续推进
+          if (S.mode === 'auto') later(function () { fi++; stepFinal(); }, 2200);
         });
       } else {
         later(function () { fi++; stepFinal(); }, 3000);
