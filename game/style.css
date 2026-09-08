@@ -52,19 +52,20 @@ body {
 
 /* ---------- 氛围背景 ---------- */
 #bg { position: absolute; inset: 0; z-index: 0; }
-/* AI 图片背景层：data.js 的 frames[].img 填入路径后自动启用 */
-#bgImg {
+/* AI 图片背景层（双图层）：data.js 的 frames[].img 填入路径后自动启用，换帧交叉淡入 */
+#bgImg, #bgImgB {
   position: absolute; inset: 0; z-index: 1; opacity: 0;
   background-size: cover; background-position: center;
-  transition: opacity 1.2s ease;
+  transition: opacity .9s ease;
+  will-change: opacity;
 }
-#bgImg.on { opacity: 1; }
+#bgImg.on, #bgImgB.on { opacity: 1; }
 .hidden { display: none !important; }
 #bgGrad {
   position: absolute; inset: -5%;
   background:
     radial-gradient(120% 90% at 50% 20%, var(--sky) 0%, var(--sky2) 42%, var(--deep) 100%);
-  transition: background 1.2s ease;
+  transition: opacity 1s ease, background 1.2s ease;
 }
 #bgTexture {
   position: absolute; inset: 0;
@@ -236,6 +237,9 @@ body.mood-mist .p { background: rgba(210,215,225,.08); box-shadow: none; width: 
 /* 淡入辅助 */
 .fadeIn { animation: fadeIn .7s ease both; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px);} to { opacity: 1; transform: none;} }
+/* 文字/字幕轻淡入（不位移，避免视觉跳动） */
+.fadeSoft { animation: fadeSoft .55s ease both; }
+@keyframes fadeSoft { from { opacity: 0; } to { opacity: 1; } }
 
 /* 交互细节 */
 #scene { pointer-events: none; }
