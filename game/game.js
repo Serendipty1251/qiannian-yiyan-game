@@ -553,6 +553,9 @@
     var finish = function () {
       if (finished) return;
       finished = true;
+      // 转场黑幕撤下前先把底层瞬时清纯黑：黑幕淡出时露出的只能是黑，
+      // 不会把上一帧画面（如序章 act0_2）透出来，实现黑幕间无缝切换
+      blackout();
       el.transition.classList.remove('show');
       later(done, S.mode === 'auto' ? 550 : 420);
     };
