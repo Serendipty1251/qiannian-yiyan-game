@@ -358,8 +358,11 @@
     if (fr.text) {
       var cps = S.mode === 'auto' ? 24 : 60;
       typeInto(el.line, fr.text, cps, after);
+    } else if (S.mode === 'auto') {
+      later(after, 1600);
     } else {
-      later(after, S.mode === 'auto' ? 1600 : 900);
+      // 手动：无文字帧不设任何自动计时，画面停住并立即出现“继续”
+      after();
     }
     if (S.mode === 'manual') {
       // 点击正文 = 一次点击、一个明确变化：
