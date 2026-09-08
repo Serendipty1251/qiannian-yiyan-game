@@ -546,6 +546,11 @@
   // ---------- 转场 ----------
   function showTransition(text, done) {
     hide(el.nextBtn);
+    // 转场黑幕应是一张“干净黑幕”：清掉上一幕残留的场景字幕/旁白/幕标签/事实栏，
+    // 避免转场与下一幕标题之间叠着上一帧的字幕（如序章帧2 的“阿什河…”正文等）
+    clearScene();
+    el.actTag.textContent = '';
+    el.factbar.textContent = '';
     el.transitionText.textContent = text;
     popFade(el.transitionText);
     show(el.transition);
