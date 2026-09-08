@@ -480,12 +480,9 @@
     var continueToNext = function () {
       el.ending.classList.remove('show');
       if (isFinal) { playFinal(); return; }
-      // 转场到下一幕
-      S.phase = 'transition';
-      showTransition(a.transition, function () {
-        if (a.id === 'act7') { afterAllActs(); return; }
-        enterAct(S.actIdx + 1);
-      });
+      // 删掉幕间黑幕转场：正确结局预览播完直接进下一幕标题卡，与序章一致
+      if (a.id === 'act7') { afterAllActs(); return; }
+      enterAct(S.actIdx + 1);
     };
     typeInto(el.endingVoice, ch.ending.voice, S.mode === 'auto' ? 16 : 45, function () {
       if (S.mode === 'auto') { later(continueToNext, 2300); return; }
