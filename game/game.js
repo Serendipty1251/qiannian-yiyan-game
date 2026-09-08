@@ -116,6 +116,24 @@
     spawnParticles(mood);
   }
 
+  // 进入黑幕（报幕标题卡/片名字幕）前的底层处理：
+  // 背景换色本身有 1.2s 渐变，而黑幕 600ms 就会淡入盖满——
+  // 若直接改色，黑幕半透明的那段窗口会透出“正在渐变的旧画面”，形成一闪而过。
+  // 因此这里临时禁用过渡：让底层在任何报幕黑幕出现前瞬间变纯黑、旧图即时退场，
+  // 再恢复过渡，保证黑幕淡入时底下已无任何亮色可透。
+  function blackout() {
+    var g = el.bgGrad;
+    g.style.transition = 'none';
+    bgLayers.forEach(function (l) { l.style.transition = 'none'; l.classList.remove('on'); });
+    setMood('black', { sky: '#000000', sky2: '#0b0b0d', deep: '#000000' });
+    g.style.opacity = '1';
+    curOn = -1;
+    void g.offsetWidth;           // 强制 reflow，让“瞬时变黑”立即生效
+    g.style.transition = '';
+    bgLayers.forEach(function (l) { l.style.transition = ''; });
+    spawnParticles('black');      // 纯黑幕不落粒子
+  }
+
   // 粒子氛围
   var PCOUNT = { snow: 70, rain: 90, dust: 34, ember: 30, light: 44, mist: 9 };
   function clearParticles() {
@@ -213,9 +231,9 @@
     var a = act();
     el.era.textContent = a.era;
     el.factbar.textContent = '史实依据：' + a.facts;
-    // 幕标题卡（黑幕白字）：显示期间底层固定纯黑，避免黑幕淡入透出本幕背景而“一闪而过”
+    // 幕标题卡（黑幕白字）：底层先瞬时切纯黑，黑幕淡入期间不透出上一幕/本幕任何画面
     S.phase = 'titlecard';
-    useBackdrop('black', { sky: '#000000', sky2: '#0b0b0d', deep: '#000000' }, '');
+    blackout();
     el.actTag.textContent = a.title;
     showTitleCard(a.subtitle || a.title, a.era, function () {
       if (a.id === 'act0') { playAct0(); return; }
@@ -335,8 +353,8 @@
     if (a.frames[i + 1] && a.frames[i + 1].img) preloadShot(a.frames[i + 1].img);
 
     if (fr.kind === 'titlecard') {
-      // 大字标题帧：纯黑底、不做逐字
-      useBackdrop('black', { sky: '#000000', sky2: '#0b0b0d', deep: '#000000' }, '');
+      // 大字标题帧：瞬时切纯黑底，黑幕淡入不透出前一帧画面
+      blackout();
       el.speaker.classList.remove('show');
       el.line.textContent = fr.text;
       popFade(el.line);
