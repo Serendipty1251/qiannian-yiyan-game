@@ -277,7 +277,7 @@
       };
     } else {
       el.transition.onclick = null;
-      later(finish, 3300);
+      later(finish, 4600);   // 每幕大字标题卡：自动下多停留，读清“第几幕·地名/年份”
     }
   }
 
