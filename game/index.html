@@ -62,8 +62,41 @@
         <button class="bigBtn primary" id="btnManual">▶ 手动试玩</button>
         <button class="bigBtn" id="btnAuto">◆ 自动演示</button>
       </div>
+      <div class="menuSec">
+        <button class="midBtn" id="btnTimeline">◈ 章节 · 时间轴</button>
+        <button class="midBtn" id="btnGallery">❖ 结局图鉴</button>
+      </div>
       <div class="menuTip">手动试玩：你来选择每一步；自动演示：沿史实正确路径自动播完。<br>
-      选错不罚——那只是「另一种真实历史的可能」，3 秒后回到本幕重选。</div>
+      选错不罚——那只是「另一种真实历史的可能」，3 秒后回到本幕重选。<br>
+      「章节 · 时间轴」可任选一幕开始；「结局图鉴」会点亮你曾走出的每一段历史。</div>
+    </div>
+  </div>
+
+  <!-- 第二屏面板：章节时间轴 / 结局图鉴 -->
+  <div class="overlay" id="panelOverlay">
+    <div class="panelBox">
+      <div class="panelHead">
+        <button class="panelBack" id="panelBack">‹ 主菜单</button>
+        <div class="panelTabs">
+          <button class="ptab on" data-tab="timeline">◈ 章节 · 时间轴</button>
+          <button class="ptab" data-tab="gallery">❖ 结局图鉴</button>
+        </div>
+      </div>
+      <div class="panelBody">
+        <div class="pane on" id="paneTimeline"></div>
+        <div class="pane" id="paneGallery"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图鉴回看弹层 -->
+  <div class="overlay" id="viewOverlay">
+    <div class="viewBox">
+      <div id="viewTag"></div>
+      <div id="viewTitle"></div>
+      <div id="viewVoice"></div>
+      <div id="viewFact"></div>
+      <div id="viewHint">点击任意处返回</div>
     </div>
   </div>
 
@@ -90,7 +123,7 @@
   </div>
 </div>
 
-<script src="data.js?v=9"></script>
-<script src="game.js?v=9"></script>
+<script src="data.js?v=10"></script>
+<script src="game.js?v=10"></script>
 </body>
 </html>
