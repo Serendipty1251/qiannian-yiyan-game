@@ -213,12 +213,14 @@
     var a = act();
     el.era.textContent = a.era;
     el.factbar.textContent = '史实依据：' + a.facts;
-    // 幕标题卡（黑幕白字）
+    // 幕标题卡（黑幕白字）：显示期间底层固定纯黑，避免黑幕淡入透出本幕背景而“一闪而过”
     S.phase = 'titlecard';
-    useBackdrop(a.mood, a.palette, '');
+    useBackdrop('black', { sky: '#000000', sky2: '#0b0b0d', deep: '#000000' }, '');
     el.actTag.textContent = a.title;
     showTitleCard(a.subtitle || a.title, a.era, function () {
       if (a.id === 'act0') { playAct0(); return; }
+      // 标题卡结束：先切回本幕氛围背景，再播统一独白
+      useBackdrop(a.mood, a.palette, '');
       // 统一独白
       S.phase = 'intro';
       showSpeaker('');
