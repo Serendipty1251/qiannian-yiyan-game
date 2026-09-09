@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
@@ -23,19 +23,21 @@
   <div class="bar top"></div>
   <div class="bar bottom"></div>
 
-  <!-- 场景文字区 -->
+  <!-- 场景文字区：台词在对话框中，纯分镜说明为无框浮字 -->
   <section id="scene">
     <div id="actTag"></div>
-    <div id="speaker"></div>
-    <div id="line"></div>
-    <div id="sub"></div>
+    <div id="caption">
+      <div id="speaker"></div>
+      <div id="line"></div>
+      <div id="sub"></div>
+    </div>
   </section>
 
   <!-- HUD -->
   <header id="hud">
     <div id="era" class="mono">— · —</div>
     <div id="modeTag"></div>
-    <button id="restartBtn" title="回到主菜单">主菜单</button>
+    <button id="restartBtn" title="播放菜单">☰ 菜单</button>
   </header>
   <footer id="hudFoot">
     <div id="factbar"></div>
@@ -47,6 +49,26 @@
 
   <!-- 选项区 -->
   <div id="choices"></div>
+
+  <!-- 播放中菜单（手动模式暂停层，不影响现场进度） -->
+  <div class="overlay" id="pauseOverlay">
+    <div class="menuBox">
+      <div class="menuEyebrow">☰ 播放菜单</div>
+      <div id="pauseTitle">—</div>
+      <div id="pauseMeta"></div>
+      <div class="menuBtns">
+        <button class="bigBtn primary" id="btnResume">▶ 继续游戏</button>
+      </div>
+      <div class="menuSec">
+        <button class="midBtn" id="btnPauseRestart">↺ 重新本幕</button>
+        <button class="midBtn" id="btnPauseTimeline">◈ 章节 · 时间轴</button>
+        <button class="midBtn" id="btnPauseGallery">❖ 结局图鉴</button>
+        <button class="midBtn" id="btnPauseMenu">☰ 回到主菜单</button>
+      </div>
+      <div class="menuTip">暂停不会打断当前那句台词——「继续」就回到原文处。<br>
+      「重新本幕」将从本幕标题卡重新开始；Esc 可随时关闭本菜单。</div>
+    </div>
+  </div>
 
   <!-- 主菜单 -->
   <div class="overlay" id="menuOverlay">
@@ -65,10 +87,12 @@
       <div class="menuSec">
         <button class="midBtn" id="btnTimeline">◈ 章节 · 时间轴</button>
         <button class="midBtn" id="btnGallery">❖ 结局图鉴</button>
+        <button class="midBtn" id="btnFigures">◆ 人物志 · 何延川</button>
       </div>
       <div class="menuTip">手动试玩：你来选择每一步；自动演示：沿史实正确路径自动播完。<br>
       选错不罚——那只是「另一种真实历史的可能」，3 秒后回到本幕重选。<br>
-      「章节 · 时间轴」可任选一幕开始；「结局图鉴」会点亮你曾走出的每一段历史。</div>
+      「章节 · 时间轴」可任选一幕开始；「结局图鉴」会点亮你曾走出的每一段历史；<br>
+      「人物志」翻开阿什河畔史实人物的小传。</div>
     </div>
   </div>
 
@@ -80,11 +104,13 @@
         <div class="panelTabs">
           <button class="ptab on" data-tab="timeline">◈ 章节 · 时间轴</button>
           <button class="ptab" data-tab="gallery">❖ 结局图鉴</button>
+          <button class="ptab" data-tab="figures">◆ 人物志</button>
         </div>
       </div>
       <div class="panelBody">
         <div class="pane on" id="paneTimeline"></div>
         <div class="pane" id="paneGallery"></div>
+        <div class="pane" id="paneFigures"></div>
       </div>
     </div>
   </div>
@@ -121,9 +147,16 @@
       <div class="creditFoot">哈尔滨市阿城区 · 金源文化 · 东北抗联文化<br>《千年一眼：从金源到抗联》· 大学生创新创业大赛演示版</div>
     </div>
   </div>
+
+  <!-- 手机竖屏提示（横屏适配） -->
+  <div id="rotateOverlay">
+    <div class="rotIcon">↻</div>
+    <div class="rotTitle">请横置手机</div>
+    <div class="rotSub">本作按横屏打造，旋转屏幕后自动进入游戏界面</div>
+  </div>
 </div>
 
-<script src="data.js?v=10"></script>
-<script src="game.js?v=10"></script>
+<script src="data.js?v=15"></script>
+<script src="game.js?v=15"></script>
 </body>
 </html>
