@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="style.css?v=15">
+<link rel="stylesheet" href="style.css?v=16">
 </head>
 <body>
 
@@ -50,23 +50,41 @@
   <!-- 选项区 -->
   <div id="choices"></div>
 
-  <!-- 播放中菜单（手动模式暂停层，不影响现场进度） -->
+  <!-- 播放中菜单（手动/自动通用暂停层：冻结推进计时与逐字，恢复后无缝继续） -->
   <div class="overlay" id="pauseOverlay">
     <div class="menuBox">
       <div class="menuEyebrow">☰ 播放菜单</div>
       <div id="pauseTitle">—</div>
       <div id="pauseMeta"></div>
+      <div id="pauseProg"></div>
       <div class="menuBtns">
         <button class="bigBtn primary" id="btnResume">▶ 继续游戏</button>
       </div>
-      <div class="menuSec">
+      <div class="menuSec" id="pauseQuick">
         <button class="midBtn" id="btnPauseRestart">↺ 重新本幕</button>
-        <button class="midBtn" id="btnPauseTimeline">◈ 章节 · 时间轴</button>
-        <button class="midBtn" id="btnPauseGallery">❖ 结局图鉴</button>
-        <button class="midBtn" id="btnPauseMenu">☰ 回到主菜单</button>
+        <button class="midBtn" id="btnPauseActs">◈ 跳到某一幕</button>
+        <button class="midBtn" id="btnRecall">↩ 回看本幕台词</button>
+        <button class="midBtn" id="btnPrefs">☰ 播放偏好</button>
       </div>
-      <div class="menuTip">暂停不会打断当前那句台词——「继续」就回到原文处。<br>
-      「重新本幕」将从本幕标题卡重新开始；Esc 可随时关闭本菜单。</div>
+      <div class="pzPane" id="pzActs">
+        <div class="pzHead">◈ 跳到某一幕 · 从该幕开头重新播放</div>
+        <div class="pzBody" id="pzActList"></div>
+      </div>
+      <div class="pzPane" id="pzRecall">
+        <div class="pzHead">↩ 本幕已播台词（含抉择提问）</div>
+        <div class="pzBody" id="pzRecallList"></div>
+      </div>
+      <div class="pzPane" id="pzPrefs">
+        <div class="pzHead">☰ 播放偏好 · 即时生效并自动记忆</div>
+        <div class="pzBody" id="pzPrefsBox"></div>
+      </div>
+      <div class="menuSec" id="pauseLinks">
+        <button class="midBtn slim" id="btnPauseTimeline">◈ 章节 · 时间轴</button>
+        <button class="midBtn slim" id="btnPauseGallery">❖ 结局图鉴</button>
+        <button class="midBtn slim" id="btnPauseMenu">☰ 回到主菜单</button>
+      </div>
+      <div class="menuTip">暂停时自动演示的推进计时与逐字都会被冻结——「继续」就回到暂停处。<br>
+      「重新本幕」从本幕标题卡重来；Esc 可随时打开 / 关闭本菜单。</div>
     </div>
   </div>
 
@@ -156,7 +174,7 @@
   </div>
 </div>
 
-<script src="data.js?v=15"></script>
-<script src="game.js?v=15"></script>
+<script src="data.js?v=16"></script>
+<script src="game.js?v=16"></script>
 </body>
 </html>
