@@ -24,9 +24,14 @@
     view: $('viewOverlay'), viewTag: $('viewTag'), viewTitle: $('viewTitle'),
     viewVoice: $('viewVoice'), viewFact: $('viewFact'), viewHint: $('viewHint'),
     pause: $('pauseOverlay'), pauseTitle: $('pauseTitle'), pauseMeta: $('pauseMeta'),
+    pauseProg: $('pauseProg'),
     btnResume: $('btnResume'), btnPauseRestart: $('btnPauseRestart'),
     btnPauseTimeline: $('btnPauseTimeline'), btnPauseGallery: $('btnPauseGallery'),
-    btnPauseMenu: $('btnPauseMenu')
+    btnPauseMenu: $('btnPauseMenu'),
+    btnPauseActs: $('btnPauseActs'), btnRecall: $('btnRecall'), btnPrefs: $('btnPrefs'),
+    pzActs: $('pzActs'), pzActList: $('pzActList'),
+    pzRecall: $('pzRecall'), pzRecallList: $('pzRecallList'),
+    pzPrefs: $('pzPrefs'), pzPrefsBox: $('pzPrefsBox')
   };
 
   // 图片层（双图层：换 AI 背景图时交叉淡入，不硬切）
@@ -44,19 +49,104 @@
     phase: 'menu',         // titlecard|intro|frames|question|goodpreview|ending|transition|final|credit
     fIdx: 0,
     typing: false,
-    timers: [],
     particles: []
   };
 
-  // ---------- 工具 ----------
-  function later(fn, ms) {
-    var t = setTimeout(fn, ms);
-    S.timers.push(t);
-    return t;
+  // ---------- 播放偏好（逐字速度 / 自动节奏 / 字幕开关，localStorage 持久化） ----------
+  var PREF_LS = 'qiannian_pref_v1';
+  var RATE = { type: 1, auto: 1 };              // 乘数：type=逐字速度, auto=自动推进停顿
+  var PREF_TYPE = { slow: 0.7, normal: 1, fast: 1.6 };
+  var PREF_AUTO = { slow: 1.8, normal: 1, fast: 0.55 };
+  var prefs = { type: 'normal', auto: 'normal', sub: true };
+  function loadPrefs() {
+    try {
+      var raw = JSON.parse(localStorage.getItem(PREF_LS) || 'null');
+      if (raw && raw.type && PREF_TYPE[raw.type]) prefs.type = raw.type;
+      if (raw && raw.auto && PREF_AUTO[raw.auto]) prefs.auto = raw.auto;
+      if (raw && typeof raw.sub === 'boolean') prefs.sub = raw.sub;
+    } catch (e) {}
+    applyPrefs();
   }
+  function savePrefs() { try { localStorage.setItem(PREF_LS, JSON.stringify(prefs)); } catch (e) {} }
+  function applyPrefs() {
+    RATE.type = PREF_TYPE[prefs.type];
+    RATE.auto = PREF_AUTO[prefs.auto];
+    document.body.dataset.sub = prefs.sub ? 'on' : 'off';
+  }
+  function setPref(k, v) { prefs[k] = v; applyPrefs(); savePrefs(); }
+  loadPrefs();   // 载入即应用（含字幕开关）
+
+  // ---------- 本幕台词回看记录 ----------
+  var RECALL = [];
+  var RECALL_MAX = 80;
+  function recallReset() { RECALL = []; }
+  function recallTrack(node, text) {
+    // 只收“正文台词行”（el.line）的逐字内容；转场大字、结束语等不进回看
+    if (node !== el.line || !text) return;
+    var who = el.speaker.textContent || '叙述';
+    RECALL.push({ who: who, text: text });
+    if (RECALL.length > RECALL_MAX) RECALL.shift();
+  }
+  function recallPush(text) {
+    if (!text) return;
+    // 抉择提问可能重来多次，去重相邻同文本
+    var last = RECALL[RECALL.length - 1];
+    if (last && last.who === '抉择' && last.text === text) return;
+    RECALL.push({ who: '抉择', text: text });
+    if (RECALL.length > RECALL_MAX) RECALL.shift();
+  }
+
+  // ---------- 工具 ----------
+  // 可冻结计时器：所有推进延时 / 逐字打字节拍都登记在 _pend。
+  // 播放暂停时把整支队列“停表”（记住已走时间），继续后按剩余时间恢复，实现无缝真暂停。
+  var _pend = [];
+  var _paused = false;
+  function _mkRec(fn, ms) {
+    var rec = { fn: fn, ms: ms, remain: ms, t0: Date.now(), t: 0 };
+    _pend.push(rec);
+    rec.t = setTimeout(function () {
+      var i = _pend.indexOf(rec); if (i >= 0) _pend.splice(i, 1);
+      rec.fn();
+    }, rec.ms);
+    return rec;
+  }
+  // 剧情推进延时：自动演示下再乘“节奏倍率”（手动模式恒为 1）
+  function later(fn, ms) {
+    if (S.mode === 'auto') ms = Math.round(ms * RATE.auto);
+    return _mkRec(fn, ms);
+  }
+  // 内部节拍：不受自动节奏倍率影响（如结局 3 秒倒计时的逐秒 tick）
+  function ticker(fn, ms) { return _mkRec(fn, ms); }
   function clearTimers() {
-    S.timers.forEach(function (t) { clearTimeout(t); });
-    S.timers = [];
+    _pend.forEach(function (r) { clearTimeout(r.t); });
+    _pend = [];
+    _paused = false;
+  }
+  function freezeEngine() {
+    if (_paused) return;
+    _paused = true;
+    _pend.forEach(function (r) {
+      if (r.t) {
+        r.remain = r.ms - (Date.now() - r.t0);
+        if (r.remain < 0) r.remain = 1;
+        clearTimeout(r.t);
+        r.t = 0;
+      }
+    });
+  }
+  function thawEngine() {
+    if (!_paused) return;
+    _paused = false;
+    var now = Date.now();
+    _pend.forEach(function (r) {
+      if (r.t) return;
+      r.ms = Math.max(1, Math.round(r.remain));
+      r.t0 = now;
+      r.t = setTimeout(function () {
+        var i = _pend.indexOf(r); if (i >= 0) _pend.splice(i, 1);
+        r.fn();
+      }, r.ms);
+    });
   }
   function stopType() { S.typing = false; }
   function hide(idEl) { idEl.classList.remove('show'); idEl.classList.add('hidden'); }
@@ -199,20 +289,21 @@
     popFade(node);
     S.typing = true;
     var i = 0;
-    var speed = 1000 / cps;
+    var speed = 1000 / Math.max(1, cps * RATE.type);
     function step() {
       if (!S.typing) { lastType = null; if (done) done(); return; }
       i++;
       node.textContent = text.slice(0, i);
       if (i < text.length) {
-        S.timers.push(setTimeout(step, speed));
+        ticker(step, speed);       // 可冻结打字节拍
       } else {
         S.typing = false;
         lastType = null;
         if (done) done();
       }
     }
-    S.timers.push(setTimeout(step, 60));
+    ticker(step, 60);
+    recallTrack(node, text);   // 若为本幕正文台词行，写入回看记录
   }
 
   // ---------- 文本可见性 ----------
@@ -248,7 +339,7 @@
     S.mode = mode;
     S.actIdx = fromIdx || 0;
     el.modeTag.textContent = mode === 'auto' ? '◆ 自动演示' : '▶ 手动试玩';
-    el.restartBtn.textContent = mode === 'auto' ? '× 退出' : '☰ 菜单';
+    el.restartBtn.textContent = '☰ 菜单';   // 手动/自动均可呼出暂停菜单（自动为真暂停）
     hide(el.menu);
     hide(el.panel);
     hide(el.view);
@@ -265,6 +356,7 @@
   function enterAct(idx) {
     S.actIdx = idx;
     S.fIdx = 0;
+    recallReset();   // 每幕重置“本幕台词回看”
     clearScene();
     var a = act();
     el.era.textContent = a.era;
@@ -399,6 +491,7 @@
       blackout();
       el.speaker.classList.remove('show');
       el.line.textContent = fr.text;
+      recallTrack(el.line, fr.text);   // 标题帧文字也收进回看
       popFade(el.line);
       el.line.style.fontSize = 'clamp(26px, 6vh, 56px)';
       el.line.style.letterSpacing = '10px';
@@ -468,7 +561,7 @@
     el.sub.textContent = '';
     // 提问引导
     el.line.textContent = a.qPrompt || '';
-    if (a.qPrompt) popFade(el.line);
+    if (a.qPrompt) { recallPush(a.qPrompt); popFade(el.line); }
     el.line.style.fontSize = '';
     captionShow('plain');   // 抉择引导不套框，避免与右侧选项卡挤占
     el.choices.innerHTML = '';
@@ -748,7 +841,7 @@
       era: '当代 · 阿什河',
       tag: '家国永续',
       kind: 'credit',
-      voice: '古人筑城立根，先烈浴血守国，我们薪火相传。这就是阿什河的故事，这就是中国的故事。',
+      voice: '八百多年前，完颜阿骨打在按出虎水畔筑城奋起，拒外侮、守故土；烽火年代，何延川从这片河畔挺身而出，抛头颅、护家国。古人筑城立根，先烈浴血守国，我们薪火相传。这就是阿什河的故事，这就是中国的故事。',
       fact: '哈尔滨市阿城区 · 金源文化 · 东北抗联文化（完整走完史实主线后解锁）',
       mood: FINAL_SEQ.mood,
       palette: FINAL_SEQ.palette,
@@ -953,20 +1046,130 @@
     }
   }
 
-  // ---------- 播放中菜单（手动模式暂停层） ----------
-  // 手动试玩没有“自动推进”计时器：暂停只是一层菜单浮层，不打断现场；
-  // 「继续」= 关闭菜单，回到刚才那句台词。
-  // 自动演示 / 过渡阶段呼出：按旧行为直接回主菜单（自动推进计时无法安全冻结）。
-  var PAUSE_PHASES = ['intro', 'frames', 'question'];
+  // ---------- 播放中菜单（手动 / 自动通用暂停层） ----------
+  // 打开即冻结全部推进计时与逐字（freezeEngine）；「继续」按剩余时间无缝恢复。
+  // 主菜单 / 第二屏界面阶段不呼出。
+  var PAUSE_NO = { menu: 1, panel: 1 };
   function openPause() {
-    if (S.mode !== 'manual' || PAUSE_PHASES.indexOf(S.phase) < 0) { showMenu(); return; }
-    var a = act();
-    el.pauseTitle.textContent = a.title;
-    el.pauseMeta.textContent = (S.phase === 'question' ? '抉择中 · ' : '') +
-      (S.mode === 'auto' ? '自动演示' : '手动试玩');
+    if (PAUSE_NO[S.phase]) return;
+    if (el.pause.classList.contains('show')) { setOpenPz(''); return; }
+    freezeEngine();
+    renderPauseMeta();
+    setOpenPz('');
     show(el.pause);
   }
-  function closePause() { hide(el.pause); }
+  function resumePause() {
+    if (!el.pause.classList.contains('show')) return;
+    hide(el.pause);
+    thawEngine();
+  }
+  function renderPauseMeta() {
+    var a = act();
+    var total = ACTS.length;
+    el.pauseTitle.textContent = a.title;
+    el.pauseMeta.textContent = (S.mode === 'auto' ? '◆ 自动演示' : '▶ 手动试玩');
+    var seg = '';
+    if (S.phase === 'question') seg = '抉择中 · 通往 ' + (a.choices ? a.choices.length : 0) + ' 个方向';
+    else if (S.phase === 'titlecard') seg = '本幕标题卡';
+    else if (S.phase === 'intro') seg = '片头独白';
+    else if (S.phase === 'goodpreview') seg = '结局预览';
+    else if (S.phase === 'ending') seg = '结局回望';
+    else if (S.phase === 'transition') seg = '幕间转场';
+    else if (S.phase === 'final') seg = '最终结局 · 千年对话';
+    else if (S.phase === 'credit') seg = '片尾';
+    else if (a.frames && a.frames.length)
+      seg = '第 ' + Math.min(S.fIdx + 1, a.frames.length) + ' / ' + a.frames.length + ' 句';
+    el.pauseProg.textContent = '第 ' + (S.actIdx + 1) + ' / ' + total + ' 幕 · ' + seg;
+  }
+
+  // 子面板：跳幕 / 回看 / 偏好（一次只展开一张）
+  var PZ_MAP = { acts: 'pzActs', recall: 'pzRecall', prefs: 'pzPrefs' };
+  var PZ_BTN = { acts: 'btnPauseActs', recall: 'btnRecall', prefs: 'btnPrefs' };
+  var openPz = '';
+  function setOpenPz(name) {
+    openPz = name || '';
+    Object.keys(PZ_MAP).forEach(function (k) {
+      var is = (k === openPz);
+      el[PZ_MAP[k]].classList.toggle('on', is);
+      el[PZ_BTN[k]].classList.toggle('on', is);
+    });
+    if (openPz === 'acts') renderActJump();
+    else if (openPz === 'recall') renderRecallList();
+    else if (openPz === 'prefs') renderPrefsUI();
+  }
+  function togglePz(name) {
+    if (!el.pause.classList.contains('show')) return;
+    setOpenPz(openPz === name ? '' : name);
+  }
+
+  // 跳幕：迷你时间轴，从任意一幕开头重播（沿用当前模式）
+  function renderActJump() {
+    el.pzActList.innerHTML = '';
+    ACTS.forEach(function (a, idx) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'pzAct' + (idx === S.actIdx ? ' cur' : '');
+      var t = document.createElement('span'); t.className = 'paTitle'; t.textContent = a.title;
+      var e = document.createElement('span'); e.className = 'paEra'; e.textContent = a.era;
+      row.appendChild(t); row.appendChild(e);
+      row.addEventListener('click', function () {
+        commitAdvance(function () { startGame(S.mode, idx); });
+      });
+      el.pzActList.appendChild(row);
+    });
+  }
+
+  // 回看：本幕已播台词记录
+  function renderRecallList() {
+    el.pzRecallList.innerHTML = '';
+    if (!RECALL.length) {
+      var e0 = document.createElement('div');
+      e0.className = 'pzEmpty';
+      e0.textContent = '本幕还没有播放到台词，先去往前推进吧。';
+      el.pzRecallList.appendChild(e0);
+      return;
+    }
+    RECALL.forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'rcRow';
+      var w = document.createElement('div'); w.className = 'rcWho'; w.textContent = r.who;
+      var x = document.createElement('div'); x.className = 'rcText'; x.textContent = r.text;
+      row.appendChild(w); row.appendChild(x);
+      el.pzRecallList.appendChild(row);
+    });
+  }
+
+  // 播放偏好设置界面（即时生效 + 自动保存）
+  function renderPrefsUI() {
+    el.pzPrefsBox.innerHTML = '';
+    var pfRow = function (name, desc, opts, cur, onPick) {
+      var r = document.createElement('div'); r.className = 'pfRow';
+      var l = document.createElement('div'); l.className = 'pfLabel';
+      var n = document.createElement('div'); n.className = 'pfName'; n.textContent = name;
+      var d = document.createElement('div'); d.className = 'pfDesc'; d.textContent = desc || '';
+      l.appendChild(n); l.appendChild(d);
+      var g = document.createElement('div'); g.className = 'pfSeg';
+      opts.forEach(function (o) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pfOpt' + (o[0] === cur ? ' on' : '');
+        b.textContent = o[1];
+        b.addEventListener('click', function () {
+          onPick(o[0]);
+          Array.prototype.forEach.call(g.children, function (c) { c.classList.toggle('on', c === b); });
+        });
+        g.appendChild(b);
+      });
+      r.appendChild(l); r.appendChild(g);
+      el.pzPrefsBox.appendChild(r);
+    };
+    pfRow('字幕', '是否显示每句的画面说明小字', [['1', '显示'], ['0', '隐藏']],
+      prefs.sub ? '1' : '0', function (v) { setPref('sub', v === '1'); });
+    pfRow('逐字速度', '影响旁白与对白的打字快慢（立即作用于下文）', [['slow', '慢'], ['normal', '标准'], ['fast', '快']],
+      prefs.type, function (v) { setPref('type', v); });
+    pfRow('自动节奏', '仅自动演示生效：句与句之间的停顿长短', [['slow', '舒缓'], ['normal', '标准'], ['fast', '紧凑']],
+      prefs.auto, function (v) { setPref('auto', v); });
+  }
 
   // ---------- 主菜单 / 重启 ----------
   function showMenu() {
@@ -1013,8 +1216,8 @@
         return;
       }
       if (S.phase === 'panel') { closePanel(); return; }
-      // 暂停菜单开着 → 先关菜单回现场；否则呼出（手动可暂停，其余回主菜单）
-      if (S.mode === 'manual' && el.pause.classList.contains('show')) { closePause(); return; }
+      // 暂停菜单开着 → 继续回现场；否则呼出（手动 / 自动均支持真暂停）
+      if (el.pause.classList.contains('show')) { resumePause(); return; }
       openPause();
       return;
     }
@@ -1036,7 +1239,7 @@
   el.panelBack.addEventListener('click', function () { commitAdvance(function () { closePanel(); }); });
   el.restartBtn.addEventListener('click', function () { openPause(); });
   // 播放中菜单
-  el.btnResume.addEventListener('click', function () { commitAdvance(closePause); });
+  el.btnResume.addEventListener('click', function () { commitAdvance(resumePause); });
   el.btnPauseRestart.addEventListener('click', function () {
     commitAdvance(function () { startGame(S.mode, S.actIdx); });
   });
@@ -1047,6 +1250,10 @@
     commitAdvance(function () { showMenu(); openPanel('gallery'); });
   });
   el.btnPauseMenu.addEventListener('click', function () { commitAdvance(showMenu); });
+  // 暂停菜单子面板：跳幕 / 台词回看 / 播放偏好
+  el.btnPauseActs.addEventListener('click', function () { togglePz('acts'); });
+  el.btnRecall.addEventListener('click', function () { togglePz('recall'); });
+  el.btnPrefs.addEventListener('click', function () { togglePz('prefs'); });
   bindPanelTabs();
 
   // 初始背景
